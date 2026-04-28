@@ -16,6 +16,8 @@ const AGENTS = [
   { id: "confidence", label: "Confidence", sub: "scoring"    },
 ];
 
+const API = import.meta.env.VITE_API_URL;
+
 export default function App() {
   const [result, setResult]       = useState(null);
   const [loading, setLoading]     = useState(false);
@@ -34,10 +36,14 @@ export default function App() {
     try {
       let res;
       if (mode === "sample") {
-        res = await fetch("/api/analyze");
+        res = await fetch(`${API}/api/analyze`);
       } else {
         const logs = JSON.parse(customText);
-        res = await fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ logs }) });
+        res = await fetch(`${API}/api/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ logs })
+        });
       }
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
