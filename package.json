@@ -1,0 +1,23 @@
+{
+  "name": "airs",
+  "version": "1.0.0",
+  "description": "Agentic Incident Resolution System",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node --watch backend/server.js",
+    "client": "cd frontend && npm run dev",
+    "install:all": "npm install && cd frontend && npm install",
+    "start": "npm run dev"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "groq-sdk": "^1.1.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

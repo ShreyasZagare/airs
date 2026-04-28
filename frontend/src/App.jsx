@@ -1,0 +1,260 @@
+import { useState, useRef } from "react";
+import "./App.css";
+
+const SAMPLE_LOGS = [
+  { level: "ERROR", message: "DB connection timeout after 30000ms", service: "payment-service" },
+  { level: "ERROR", message: "NullPointerException at PaymentService.processTransaction line 84", service: "payment-service" },
+  { level: "WARN",  message: "Connection pool at 95% capacity (190/200)", service: "db-pool" },
+  { level: "INFO",  message: "Retrying failed request (attempt 2/3)", service: "payment-service" },
+  { level: "ERROR", message: "DB connection timeout after 30000ms", service: "order-service" }
+];
+
+const AGENTS = [
+  { id: "log",        label: "Log",        sub: "parsing"    },
+  { id: "rootcause",  label: "Root Cause", sub: "diagnosing" },
+  { id: "fix",        label: "Fix",        sub: "generating" },
+  { id: "confidence", label: "Confidence", sub: "scoring"    },
+];
+
+export default function App() {
+  const [result, setResult]       = useState(null);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState(null);
+  const [mode, setMode]           = useState("sample");
+  const [customText, setCustomText] = useState(JSON.stringify(SAMPLE_LOGS, null, 2));
+  const [activeAgent, setActiveAgent] = useState(-1);
+  const [traceOpen, setTraceOpen] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  const timer = useRef(null);
+
+  async function run() {
+    setLoading(true); setError(null); setResult(null); setActiveAgent(0);
+    let step = 0;
+    timer.current = setInterval(() => { step++; setActiveAgent(Math.min(step, 3)); }, 800);
+    try {
+      let res;
+      if (mode === "sample") {
+        res = await fetch("/api/analyze");
+      } else {
+        const logs = JSON.parse(customText);
+        res = await fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ logs }) });
+      }
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      clearInterval(timer.current); setActiveAgent(-1);
+      setResult(json.data);
+    } catch (e) {
+      clearInterval(timer.current); setActiveAgent(-1); setError(e.message);
+    } finally { setLoading(false); }
+  }
+
+  const confColor = result ? (result.confidence.level === "high" ? "#22c55e" : result.confidence.level === "medium" ? "#f59e0b" : "#ef4444") : "#888";
+
+  return (
+    <div className="root">
+
+      {/* Top bar */}
+      <div className="topbar">
+        <div className="topbar-left">
+          <span className="topbar-dot" />
+          <span className="topbar-title">AIRS</span>
+          <span className="topbar-sep">/</span>
+          <span className="topbar-sub">Incident Resolution</span>
+        </div>
+        <div className="topbar-pills">
+          <span className="pill pill-teal">4 agents</span>
+          <span className="pill pill-gray">Llama 3.3</span>
+        </div>
+      </div>
+
+      {/* Agent pipeline strip */}
+      <div className="pipeline-strip">
+        {AGENTS.map((a, i) => (
+          <div key={a.id} className={"ps-item" + (loading && activeAgent === i ? " ps-active" : "") + (result ? " ps-done" : "")}>
+            <div className="ps-num">{String(i + 1).padStart(2, "0")}</div>
+            <div className="ps-label">{a.label}</div>
+            {loading && activeAgent === i && <div className="ps-pulse" />}
+            {i < AGENTS.length - 1 && <div className="ps-arrow">→</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* Main grid */}
+      <div className="main">
+
+        {/* Left: input */}
+        <div className="panel panel-input">
+          <div className="panel-header">
+            <div className="seg">
+              <button className={"seg-btn" + (mode === "sample" ? " seg-on" : "")} onClick={() => setMode("sample")}>Sample</button>
+              <button className={"seg-btn" + (mode === "custom" ? " seg-on" : "")} onClick={() => setMode("custom")}>Custom</button>
+            </div>
+          </div>
+
+          {mode === "sample" && (
+            <div className="log-list">
+              {SAMPLE_LOGS.map((l, i) => (
+                <div key={i} className="log-row">
+                  <span className={"log-badge log-" + l.level.toLowerCase()}>{l.level}</span>
+                  <span className="log-svc">{l.service}</span>
+                  <span className="log-msg">{l.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {mode === "custom" && (
+            <textarea className="log-ta" value={customText} onChange={e => setCustomText(e.target.value)} rows={10} spellCheck={false} />
+          )}
+
+          <button className="run-btn" onClick={run} disabled={loading}>
+            {loading
+              ? <><span className="run-spinner" /> Analyzing<span className="dots"><span>.</span><span>.</span><span>.</span></span></>
+              : "Run analysis →"}
+          </button>
+
+          {error && <div className="error-box">{error}</div>}
+        </div>
+
+        {/* Right: results */}
+        <div className="panel panel-result">
+          {!result && !loading && (
+            <div className="empty-state">
+              <div className="empty-icon">⟳</div>
+              <div className="empty-text">Run analysis to see results</div>
+            </div>
+          )}
+
+          {loading && (
+            <div className="loading-state">
+              <div className="loading-label">
+                {activeAgent >= 0 ? AGENTS[activeAgent].label + " agent " + AGENTS[activeAgent].sub + "…" : "Finalizing…"}
+              </div>
+              <div className="loading-bar"><div className="loading-fill" style={{ width: activeAgent >= 0 ? ((activeAgent + 1) / 4 * 100) + "%" : "100%" }} /></div>
+            </div>
+          )}
+
+          {result && (
+            <>
+              {/* Stats row */}
+              <div className="stat-row">
+                <div className="stat"><div className="stat-val red">{result.logSummary.counts.errors}</div><div className="stat-key">errors</div></div>
+                <div className="stat"><div className="stat-val amber">{result.logSummary.counts.warnings}</div><div className="stat-key">warnings</div></div>
+                <div className="stat"><div className="stat-val" style={{ color: confColor }}>{result.confidence.percentage}%</div><div className="stat-key">confidence</div></div>
+                <div className="stat"><div className="stat-val muted">{result.meta.durationMs}</div><div className="stat-key">ms</div></div>
+              </div>
+
+              {/* Recommendation banner */}
+              {result.confidence.recommendation && (
+                <div className={"rec-banner rec-" + result.confidence.level}>
+                  {result.confidence.recommendation}
+                </div>
+              )}
+
+              {/* Root cause */}
+              <div className="result-block">
+                <div className="rb-label">Root cause <span className="rb-tag">{result.rootCause.category}</span></div>
+                <div className="rb-text">{result.rootCause.cause}</div>
+                <div className="rb-meta">via {result.rootCause.method} • severity: {result.rootCause.severity}</div>
+              </div>
+
+              {/* Affected services */}
+              {result.logSummary.affectedServices.length > 0 && (
+                <div className="services-row">
+                  <div style={{ fontSize: "10px", color: "#555", letterSpacing: "1px", marginBottom: "6px" }}>AFFECTED</div>
+                  {result.logSummary.affectedServices.map(s => <span key={s} className="service-chip">{s}</span>)}
+                </div>
+              )}
+
+              {/* Fix */}
+              <div className="result-block">
+                <div className="rb-label">Fix plan <span className="rb-tag">{result.fix.estimatedResolutionTime}</span></div>
+                <div className="fix-list">
+                  {result.fix.immediate.map((s, i) => (
+                    <div key={i} className="fix-item">
+                      <span className="fix-n">{i + 1}</span>
+                      <span>{s}</span>
+                    </div>
+                  ))}
+                </div>
+                {result.fix.longTerm.length > 0 && (
+                  <>
+                    <div className="lt-label">Long term</div>
+                    {result.fix.longTerm.map((s, i) => (
+                      <div key={i} className="lt-item">→ {s}</div>
+                    ))}
+                  </>
+                )}
+                {result.fix.rollbackPlan && (
+                  <div className="rollback-note">Rollback: {result.fix.rollbackPlan}</div>
+                )}
+              </div>
+
+              {/* Confidence bars */}
+              <div className="result-block">
+                <div className="rb-label">Confidence breakdown</div>
+                {Object.entries(result.confidence.breakdown).map(([k, v]) => (
+                  <div key={k} className="cbar-row">
+                    <span className="cbar-key">{k.replace(/([A-Z])/g, " $1").trim()}</span>
+                    <div className="cbar-track"><div className="cbar-fill" style={{ width: v + "%", background: v >= 80 ? "#22c55e" : v >= 60 ? "#f59e0b" : "#ef4444" }} /></div>
+                    <span className="cbar-val">{v}%</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Confidence signals */}
+              {result?.confidence?.signals?.length > 0 && (
+                <div className="pattern-row">
+                  {result.confidence.signals.map(s => (
+                    <span key={s} className="pattern-chip">
+                      {s.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Patterns */}
+              {result.logSummary.patterns.length > 0 && (
+                <div className="pattern-row">
+                  <div style={{ width: "100%", fontSize: "10px", color: "#555", letterSpacing: "1px", marginBottom: "6px" }}>PATTERNS</div>
+                  {result.logSummary.patterns.map(p => <span key={p} className="pattern-chip">{p.replace("_", " ")}</span>)}
+                </div>
+              )}
+
+              {/* Agent handoffs */}
+              <div className="handoff-block">
+                <button className="handoff-btn" onClick={() => setHandoffOpen(o => !o)}>
+                  Agent handoffs {handoffOpen ? "▲" : "▼"}
+                </button>
+                {handoffOpen && result.handoffs && (
+                  <div className="handoff-list">
+                    {result.handoffs.map((h, i) => (
+                      <div key={i} className="handoff-row">
+                        <span className="handoff-arrow">{h.from} →</span>
+                        <span className="handoff-msg">{h.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Agent trace */}
+              <div className="trace-block">
+                <button className="trace-btn" onClick={() => setTraceOpen(o => !o)}>
+                  Agent trace {traceOpen ? "▲" : "▼"}
+                </button>
+                {traceOpen && (
+                  <div className="trace-list">
+                    {result.agentTrace.map((t, i) => <div key={i} className="trace-row"><span className="trace-dot" />{t}</div>)}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="footer">AIRS · multi-agent incident resolution · {new Date().getFullYear()}</div>
+    </div>
+  );
+}

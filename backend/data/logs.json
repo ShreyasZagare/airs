@@ -1,0 +1,9 @@
+[
+  { "level": "ERROR", "message": "DB connection timeout after 30000ms", "service": "payment-service", "timestamp": "2024-01-15T10:23:11Z" },
+  { "level": "ERROR", "message": "NullPointerException at PaymentService.processTransaction line 84", "service": "payment-service", "timestamp": "2024-01-15T10:23:12Z" },
+  { "level": "WARN",  "message": "Connection pool at 95% capacity (190/200)", "service": "db-pool", "timestamp": "2024-01-15T10:23:13Z" },
+  { "level": "INFO",  "message": "Retrying failed request (attempt 2/3)", "service": "payment-service", "timestamp": "2024-01-15T10:23:14Z" },
+  { "level": "ERROR", "message": "DB connection timeout after 30000ms", "service": "order-service", "timestamp": "2024-01-15T10:23:15Z" },
+  { "level": "INFO",  "message": "Health check passed for auth-service", "service": "auth-service", "timestamp": "2024-01-15T10:23:16Z" },
+  { "level": "WARN",  "message": "Response time degraded: 4200ms (threshold: 2000ms)", "service": "api-gateway", "timestamp": "2024-01-15T10:23:17Z" }
+]
