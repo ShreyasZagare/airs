@@ -1,6 +1,8 @@
 import { useState, useRef } from "react";
 import "./App.css";
 
+const API = import.meta.env.VITE_API_URL || "";
+
 const SAMPLE_LOGS = [
   { level: "ERROR", message: "DB connection timeout after 30000ms", service: "payment-service" },
   { level: "ERROR", message: "NullPointerException at PaymentService.processTransaction line 84", service: "payment-service" },
@@ -10,31 +12,51 @@ const SAMPLE_LOGS = [
 ];
 
 const AGENTS = [
-  { id: "log",        label: "Log",        sub: "parsing"    },
-  { id: "rootcause",  label: "Root Cause", sub: "diagnosing" },
-  { id: "fix",        label: "Fix",        sub: "generating" },
-  { id: "confidence", label: "Confidence", sub: "scoring"    },
+  { id: "log", label: "Log", sub: "parsing" },
+  { id: "rootcause", label: "Root Cause", sub: "diagnosing" },
+  { id: "fix", label: "Fix", sub: "generating" },
+  { id: "confidence", label: "Confidence", sub: "scoring" },
 ];
 
-const API = import.meta.env.VITE_API_URL;
-
 export default function App() {
-  const [result, setResult]       = useState(null);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState(null);
-  const [mode, setMode]           = useState("sample");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [mode, setMode] = useState("custom"); // ✅ default custom
   const [customText, setCustomText] = useState(JSON.stringify(SAMPLE_LOGS, null, 2));
   const [activeAgent, setActiveAgent] = useState(-1);
   const [traceOpen, setTraceOpen] = useState(false);
+  const [agentLogs, setAgentLogs] = useState([]);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const timer = useRef(null);
 
   async function run() {
-    setLoading(true); setError(null); setResult(null); setActiveAgent(0);
-    let step = 0;
-    timer.current = setInterval(() => { step++; setActiveAgent(Math.min(step, 3)); }, 800);
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setActiveAgent(0);
+    setAgentLogs([]);
+
+    const messages = [
+      "Parsing logs...",
+      "Detecting anomalies...",
+      "Correlating failures...",
+      "Identifying root cause...",
+      "Generating fix strategy...",
+      "Scoring confidence..."
+    ];
+
+    let i = 0;
+    timer.current = setInterval(() => {
+      setAgentLogs(prev => [...prev, messages[i]]);
+      setActiveAgent(Math.min(i, 3));
+      i++;
+      if (i >= messages.length) clearInterval(timer.current);
+    }, 600);
+
     try {
       let res;
+
       if (mode === "sample") {
         res = await fetch(`${API}/api/analyze`);
       } else {
@@ -42,24 +64,31 @@ export default function App() {
         res = await fetch(`${API}/api/analyze`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ logs })
+          body: JSON.stringify({ logs }),
         });
       }
+
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
-      clearInterval(timer.current); setActiveAgent(-1);
+
+      clearInterval(timer.current);
+      setActiveAgent(-1);
       setResult(json.data);
     } catch (e) {
-      clearInterval(timer.current); setActiveAgent(-1); setError(e.message);
-    } finally { setLoading(false); }
+      clearInterval(timer.current);
+      setActiveAgent(-1);
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const confColor = result ? (result.confidence.level === "high" ? "#22c55e" : result.confidence.level === "medium" ? "#f59e0b" : "#ef4444") : "#888";
+    const confColor = result ? (result.confidence.level === "high" ? "#22c55e" : result.confidence.level === "medium" ? "#f59e0b" : "#ef4444") : "#888";
 
   return (
     <div className="root">
 
-      {/* Top bar */}
+      {/* Topbar */}
       <div className="topbar">
         <div className="topbar-left">
           <span className="topbar-dot" />
@@ -69,15 +98,15 @@ export default function App() {
         </div>
         <div className="topbar-pills">
           <span className="pill pill-teal">4 agents</span>
-          <span className="pill pill-gray">Llama 3.3</span>
+          <span className="pill pill-gray">Live</span>
         </div>
       </div>
 
-      {/* Agent pipeline strip */}
+      {/* Pipeline */}
       <div className="pipeline-strip">
         {AGENTS.map((a, i) => (
-          <div key={a.id} className={"ps-item" + (loading && activeAgent === i ? " ps-active" : "") + (result ? " ps-done" : "")}>
-            <div className="ps-num">{String(i + 1).padStart(2, "0")}</div>
+          <div key={a.id} className={`ps-item ${loading && activeAgent === i ? "ps-active" : ""}`}>
+            <div className="ps-num">{i + 1}</div>
             <div className="ps-label">{a.label}</div>
             {loading && activeAgent === i && <div className="ps-pulse" />}
             {i < AGENTS.length - 1 && <div className="ps-arrow">→</div>}
@@ -85,15 +114,16 @@ export default function App() {
         ))}
       </div>
 
-      {/* Main grid */}
+      {/* Main */}
       <div className="main">
 
-        {/* Left: input */}
-        <div className="panel panel-input">
+        {/* Left Panel */}
+        <div className="panel">
+
           <div className="panel-header">
             <div className="seg">
-              <button className={"seg-btn" + (mode === "sample" ? " seg-on" : "")} onClick={() => setMode("sample")}>Sample</button>
-              <button className={"seg-btn" + (mode === "custom" ? " seg-on" : "")} onClick={() => setMode("custom")}>Custom</button>
+              <button className={`seg-btn ${mode === "sample" ? "seg-on" : ""}`} onClick={() => setMode("sample")}>Sample</button>
+              <button className={`seg-btn ${mode === "custom" ? "seg-on" : ""}`} onClick={() => setMode("custom")}>Custom</button>
             </div>
           </div>
 
@@ -101,7 +131,7 @@ export default function App() {
             <div className="log-list">
               {SAMPLE_LOGS.map((l, i) => (
                 <div key={i} className="log-row">
-                  <span className={"log-badge log-" + l.level.toLowerCase()}>{l.level}</span>
+                  <span className={`log-badge log-${l.level.toLowerCase()}`}>{l.level}</span>
                   <span className="log-svc">{l.service}</span>
                   <span className="log-msg">{l.message}</span>
                 </div>
@@ -110,23 +140,25 @@ export default function App() {
           )}
 
           {mode === "custom" && (
-            <textarea className="log-ta" value={customText} onChange={e => setCustomText(e.target.value)} rows={10} spellCheck={false} />
+            <textarea
+              className="log-ta"
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+            />
           )}
 
           <button className="run-btn" onClick={run} disabled={loading}>
-            {loading
-              ? <><span className="run-spinner" /> Analyzing<span className="dots"><span>.</span><span>.</span><span>.</span></span></>
-              : "Run analysis →"}
+            {loading ? "⚙️ Agents collaborating..." : "Run analysis →"}
           </button>
 
           {error && <div className="error-box">{error}</div>}
         </div>
 
-        {/* Right: results */}
+        {/* Right Panel */}
         <div className="panel panel-result">
+
           {!result && !loading && (
             <div className="empty-state">
-              <div className="empty-icon">⟳</div>
               <div className="empty-text">Run analysis to see results</div>
             </div>
           )}
@@ -260,7 +292,7 @@ export default function App() {
         </div>
       </div>
 
-      <div className="footer">AIRS · multi-agent incident resolution · {new Date().getFullYear()}</div>
+      <div className="footer">AIRS · multi-agent system</div>
     </div>
   );
 }

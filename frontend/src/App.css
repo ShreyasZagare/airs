@@ -173,3 +173,77 @@ body { background: var(--bg); color: var(--text); font-family: 'SF Mono', 'Fira 
 /* Results panel animation */
 .panel-result .result-block, .panel-result .stat-row, .panel-result .pattern-row, .panel-result .trace-block, .panel-result .rec-banner, .panel-result .services-row, .panel-result .handoff-block { animation: fadeUp 0.35s ease both; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* 🔥 Layout fix */
+html, body, #root {
+  height: 100%;
+}
+
+.root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Prevent full scroll */
+.main {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Panels scroll instead */
+.panel {
+  overflow-y: auto;
+}
+
+/* 🔥 Agent activity stream */
+.agent-stream {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  animation: fadeUp 0.3s ease forwards;
+}
+
+.agent-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--teal);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--teal);
+}
+
+.log-ta{
+  height: 300px;
+}
+
+/* Mobile improvements */
+@media (max-width: 700px) {
+  .root {
+    padding: 16px 12px;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .stat-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}
