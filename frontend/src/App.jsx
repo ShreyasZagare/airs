@@ -11,6 +11,10 @@ const SAMPLE_LOGS = [
   { level: "ERROR", message: "DB connection timeout after 30000ms", service: "order-service" }
 ];
 
+const RAW_EXCEPTION_EXAMPLE = `Exception in thread "main" java.lang.NullPointerException
+        at com.app.Main.run(Main.java:42)
+        at com.app.Worker.process(Worker.java:18)`;
+
 const AGENTS = [
   { id: "log", label: "Log", sub: "parsing" },
   { id: "rootcause", label: "Root Cause", sub: "diagnosing" },
@@ -22,8 +26,8 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [mode, setMode] = useState("custom"); // ✅ default custom
-  const [customText, setCustomText] = useState(JSON.stringify(SAMPLE_LOGS, null, 2));
+  const [mode, setMode] = useState("custom");
+  const [customText, setCustomText] = useState(RAW_EXCEPTION_EXAMPLE);
   const [activeAgent, setActiveAgent] = useState(-1);
   const [traceOpen, setTraceOpen] = useState(false);
   const [agentLogs, setAgentLogs] = useState([]);
@@ -60,11 +64,11 @@ export default function App() {
       if (mode === "sample") {
         res = await fetch(`${API}/api/analyze`);
       } else {
-        const logs = JSON.parse(customText);
+        // Send the raw string – the backend normalizer will parse it.
         res = await fetch(`${API}/api/analyze`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ logs }),
+          body: JSON.stringify({ logs: customText }),
         });
       }
 
@@ -83,11 +87,10 @@ export default function App() {
     }
   }
 
-    const confColor = result ? (result.confidence.level === "high" ? "#22c55e" : result.confidence.level === "medium" ? "#f59e0b" : "#ef4444") : "#888";
+  const confColor = result ? (result.confidence.level === "high" ? "#22c55e" : result.confidence.level === "medium" ? "#f59e0b" : "#ef4444") : "#888";
 
   return (
     <div className="root">
-
       {/* Topbar */}
       <div className="topbar">
         <div className="topbar-left">
@@ -116,10 +119,8 @@ export default function App() {
 
       {/* Main */}
       <div className="main">
-
         {/* Left Panel */}
         <div className="panel">
-
           <div className="panel-header">
             <div className="seg">
               <button className={`seg-btn ${mode === "sample" ? "seg-on" : ""}`} onClick={() => setMode("sample")}>Sample</button>
@@ -144,6 +145,7 @@ export default function App() {
               className="log-ta"
               value={customText}
               onChange={(e) => setCustomText(e.target.value)}
+              placeholder="Paste any logs: JSON, Apache, syslog, or raw exceptions…"
             />
           )}
 
@@ -291,7 +293,6 @@ export default function App() {
           )}
         </div>
       </div>
-
       <div className="footer">AIRS · multi-agent system</div>
     </div>
   );

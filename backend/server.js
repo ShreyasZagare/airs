@@ -19,7 +19,7 @@ const defaultLogs = JSON.parse(
 );
 
 // Analyze default sample logs
-app.get("/api/analyze", async (req, res) => {
+app.get("/api/analyze", async (_req, res) => {
   try {
     const result = await orchestrate(defaultLogs);
     res.json({ success: true, data: result });
@@ -29,18 +29,20 @@ app.get("/api/analyze", async (req, res) => {
   }
 });
 
-// Analyze custom logs sent in request body
+// Analyze custom logs – accepts ANY non‑empty format
 app.post("/api/analyze", async (req, res) => {
   try {
     const { logs } = req.body;
 
-    if (!Array.isArray(logs) || logs.length === 0) {
+    // Accept any non‑empty input (string, array, object, etc.)
+    if (!logs || (typeof logs === "string" && logs.trim() === "")) {
       return res.status(400).json({
         success: false,
-        error: "Request body must include a non-empty `logs` array",
+        error: "Request body must include a non‑empty `logs` field",
       });
     }
 
+    // Pass it straight to the orchestrator – it normalises internally
     const result = await orchestrate(logs);
     res.json({ success: true, data: result });
   } catch (err) {
@@ -50,13 +52,13 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 // Health check
-app.get("/api/health", (req, res) => {
+app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 app.listen(PORT, () => {
   console.log(`\n🚀 AIRS backend running on http://localhost:${PORT}`);
   console.log(`   GET  /api/analyze   → analyze sample logs`);
-  console.log(`   POST /api/analyze   → analyze custom logs`);
+  console.log(`   POST /api/analyze   → analyze any log format (JSON, text, exceptions…)`);
   console.log(`   GET  /api/health    → health check\n`);
 });
