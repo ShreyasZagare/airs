@@ -10,10 +10,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
-app.use(express.json({ limit: "5mb" })); // Increase limit to accept large log pastes (e.g., 5 MB)
+// ---------- CONFIG ----------
+const MAX_LOG_LINES = 500;
+// ----------------------------
 
-// Load default sample logs
+app.use(cors());
+app.use(express.json({ limit: "5mb" }));
+
 const defaultLogs = JSON.parse(
   readFileSync(join(__dirname, "data/logs.json"), "utf-8")
 );
@@ -29,7 +32,6 @@ app.get("/api/analyze", async (_req, res) => {
   }
 });
 
-// Analyze custom logs – accepts ANY non‑empty format, trims if too large
 app.post("/api/analyze", async (req, res) => {
   try {
     let { logs } = req.body;
@@ -42,23 +44,17 @@ app.post("/api/analyze", async (req, res) => {
       });
     }
 
-    // --- Trim large input to keep only the most recent (bottom) logs ---
     if (typeof logs === "string") {
-      // Keep at most the last 500,000 characters (~500 KB)
-      if (logs.length > 500_000) {
-        logs = logs.slice(-500_000);
-        // Discard the first (now incomplete) line
-        const firstNL = logs.indexOf("\n");
-        if (firstNL > 0) logs = logs.slice(firstNL + 1);
+      const lines = logs.split(/\r?\n/);
+      if (lines.length > MAX_LOG_LINES) {
+        logs = lines.slice(-MAX_LOG_LINES).join("\n");
       }
     } else if (Array.isArray(logs)) {
-      // Keep at most the last 1000 entries
-      if (logs.length > 1000) {
-        logs = logs.slice(-1000);
+      if (logs.length > MAX_LOG_LINES) {
+        logs = logs.slice(-MAX_LOG_LINES);
       }
     }
 
-    // Pass it straight to the orchestrator – it normalises internally
     const result = await orchestrate(logs);
     res.json({ success: true, data: result });
   } catch (err) {
@@ -75,6 +71,6 @@ app.get("/api/health", (_req, res) => {
 app.listen(PORT, () => {
   console.log(`\n🚀 AIRS backend running on http://localhost:${PORT}`);
   console.log(`   GET  /api/analyze   → analyze sample logs`);
-  console.log(`   POST /api/analyze   → analyze any log format (auto‑trims large input)`);
+  console.log(`   POST /api/analyze   → analyze any log format (keeps last ${MAX_LOG_LINES} lines)`);
   console.log(`   GET  /api/health    → health check\n`);
 });

@@ -3,15 +3,7 @@ import "./App.css";
 
 const API = import.meta.env.VITE_API_URL || "";
 
-const SAMPLE_LOGS = [
-  { level: "ERROR", message: "DB connection timeout after 30000ms", service: "payment-service" },
-  { level: "ERROR", message: "NullPointerException at PaymentService.processTransaction line 84", service: "payment-service" },
-  { level: "WARN",  message: "Connection pool at 95% capacity (190/200)", service: "db-pool" },
-  { level: "INFO",  message: "Retrying failed request (attempt 2/3)", service: "payment-service" },
-  { level: "ERROR", message: "DB connection timeout after 30000ms", service: "order-service" }
-];
-
-const RAW_EXCEPTION_EXAMPLE = `[2025-04-01 14:23:01] ERROR com.app.PaymentService: NullPointerException at PaymentService.processPayment line 120
+const SAMPLE_LOGS_TEXT = `[2025-04-01 14:23:01] ERROR com.app.PaymentService: NullPointerException at PaymentService.processPayment line 120
 [2025-04-01 14:23:02] ERROR com.app.OrderService: NullPointerException at OrderService.placeOrder line 55
 java.lang.NullPointerException
         at com.app.Main.run(Main.java:42)
@@ -33,12 +25,22 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState("custom");
-  const [customText, setCustomText] = useState(RAW_EXCEPTION_EXAMPLE);
+  const [customText, setCustomText] = useState(""); // custom starts empty
   const [activeAgent, setActiveAgent] = useState(-1);
   const [traceOpen, setTraceOpen] = useState(false);
   const [agentLogs, setAgentLogs] = useState([]);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const timer = useRef(null);
+  const [expandedErrors, setExpandedErrors] = useState([]);
+
+  function switchMode(newMode) {
+    setMode(newMode);
+    if (newMode === "sample") {
+      setCustomText(SAMPLE_LOGS_TEXT); // fill textarea with sample logs
+    } else {
+      setCustomText(""); // clear textarea for custom input
+    }
+  }
 
   async function run() {
     setLoading(true);
@@ -46,6 +48,7 @@ export default function App() {
     setResult(null);
     setActiveAgent(0);
     setAgentLogs([]);
+    setExpandedErrors([]);
 
     const messages = [
       "Parsing logs...",
@@ -65,16 +68,11 @@ export default function App() {
     }, 600);
 
     try {
-      let res;
-      if (mode === "sample") {
-        res = await fetch(`${API}/api/analyze`);
-      } else {
-        res = await fetch(`${API}/api/analyze`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ logs: customText }),
-        });
-      }
+      const res = await fetch(`${API}/api/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logs: customText }),
+      });
 
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
@@ -91,7 +89,19 @@ export default function App() {
     }
   }
 
-  const confColor = result ? (result.confidence.level === "high" ? "#22c55e" : result.confidence.level === "medium" ? "#f59e0b" : "#ef4444") : "#888";
+  function toggleErrorExpand(idx) {
+    setExpandedErrors(prev =>
+      prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+    );
+  }
+
+  const confColor = result
+    ? result.confidence.level === "high"
+      ? "#22c55e"
+      : result.confidence.level === "medium"
+        ? "#f59e0b"
+        : "#ef4444"
+    : "#888";
 
   return (
     <div className="root">
@@ -105,7 +115,10 @@ export default function App() {
         </div>
         <div className="topbar-pills">
           <span className="pill pill-teal">4 agents</span>
-          <span className="pill pill-gray">Live</span>
+          {/* "Live" pill always shows "Live", but gets a pulsing dot when executing */}
+          <span className={`pill pill-gray ${loading ? "pill-live" : ""}`}>
+            <span className={`live-dot ${loading ? "live-dot-active" : ""}`} /> Live
+          </span>
         </div>
       </div>
 
@@ -127,31 +140,28 @@ export default function App() {
         <div className="panel">
           <div className="panel-header">
             <div className="seg">
-              <button className={`seg-btn ${mode === "sample" ? "seg-on" : ""}`} onClick={() => setMode("sample")}>Sample</button>
-              <button className={`seg-btn ${mode === "custom" ? "seg-on" : ""}`} onClick={() => setMode("custom")}>Custom</button>
+              <button
+                className={`seg-btn ${mode === "sample" ? "seg-on" : ""}`}
+                onClick={() => switchMode("sample")}
+              >
+                Sample
+              </button>
+              <button
+                className={`seg-btn ${mode === "custom" ? "seg-on" : ""}`}
+                onClick={() => switchMode("custom")}
+              >
+                Custom
+              </button>
             </div>
           </div>
 
-          {mode === "sample" && (
-            <div className="log-list">
-              {SAMPLE_LOGS.map((l, i) => (
-                <div key={i} className="log-row">
-                  <span className={`log-badge log-${l.level.toLowerCase()}`}>{l.level}</span>
-                  <span className="log-svc">{l.service}</span>
-                  <span className="log-msg">{l.message}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {mode === "custom" && (
-            <textarea
-              className="log-ta"
-              value={customText}
-              onChange={(e) => setCustomText(e.target.value)}
-              placeholder="Paste any logs: JSON, Apache, syslog, or raw exceptions…"
-            />
-          )}
+          {/* Unified textarea */}
+          <textarea
+            className="log-ta"
+            value={customText}
+            onChange={(e) => setCustomText(e.target.value)}
+            placeholder="Paste any logs: JSON, Apache, syslog, or raw exceptions…"
+          />
 
           <button className="run-btn" onClick={run} disabled={loading}>
             {loading ? "⚙️ Agents collaborating..." : "Run analysis →"}
@@ -160,7 +170,7 @@ export default function App() {
           {error && <div className="error-box">{error}</div>}
         </div>
 
-        {/* Right Panel */}
+        {/* Right Panel – unchanged from previous version */}
         <div className="panel panel-result">
           {!result && !loading && (
             <div className="empty-state">
@@ -171,9 +181,21 @@ export default function App() {
           {loading && (
             <div className="loading-state">
               <div className="loading-label">
-                {activeAgent >= 0 ? AGENTS[activeAgent].label + " agent " + AGENTS[activeAgent].sub + "…" : "Finalizing…"}
+                {activeAgent >= 0
+                  ? AGENTS[activeAgent].label + " agent " + AGENTS[activeAgent].sub + "…"
+                  : "Finalizing…"}
               </div>
-              <div className="loading-bar"><div className="loading-fill" style={{ width: activeAgent >= 0 ? ((activeAgent + 1) / 4 * 100) + "%" : "100%" }} /></div>
+              <div className="loading-bar">
+                <div
+                  className="loading-fill"
+                  style={{
+                    width:
+                      activeAgent >= 0
+                        ? ((activeAgent + 1) / 4) * 100 + "%"
+                        : "100%",
+                  }}
+                />
+              </div>
             </div>
           )}
 
@@ -181,10 +203,24 @@ export default function App() {
             <>
               {/* Stats row */}
               <div className="stat-row">
-                <div className="stat"><div className="stat-val red">{result.logSummary.counts.errors}</div><div className="stat-key">errors</div></div>
-                <div className="stat"><div className="stat-val amber">{result.logSummary.counts.warnings}</div><div className="stat-key">warnings</div></div>
-                <div className="stat"><div className="stat-val" style={{ color: confColor }}>{result.confidence.percentage}%</div><div className="stat-key">confidence</div></div>
-                <div className="stat"><div className="stat-val muted">{result.meta.durationMs}</div><div className="stat-key">ms</div></div>
+                <div className="stat">
+                  <div className="stat-val red">{result.logSummary.counts.errors}</div>
+                  <div className="stat-key">errors</div>
+                </div>
+                <div className="stat">
+                  <div className="stat-val amber">{result.logSummary.counts.warnings}</div>
+                  <div className="stat-key">warnings</div>
+                </div>
+                <div className="stat">
+                  <div className="stat-val" style={{ color: confColor }}>
+                    {result.confidence.percentage}%
+                  </div>
+                  <div className="stat-key">confidence</div>
+                </div>
+                <div className="stat">
+                  <div className="stat-val muted">{result.meta.durationMs}</div>
+                  <div className="stat-key">ms</div>
+                </div>
               </div>
 
               {/* Recommendation banner */}
@@ -196,26 +232,54 @@ export default function App() {
 
               {/* Root cause */}
               <div className="result-block">
-                <div className="rb-label">Root cause <span className="rb-tag">{result.rootCause.category}</span></div>
+                <div className="rb-label">
+                  Root cause <span className="rb-tag">{result.rootCause.category}</span>
+                </div>
                 <div className="rb-text">{result.rootCause.cause}</div>
-                <div className="rb-meta">via {result.rootCause.method} • severity: {result.rootCause.severity}</div>
+                <div className="rb-meta">
+                  via {result.rootCause.method} • severity: {result.rootCause.severity}
+                </div>
               </div>
 
-              {/* Grouped errors - NEW */}
+              {/* Grouped errors */}
               {result.logSummary.groupedErrors && result.logSummary.groupedErrors.length > 0 && (
                 <div className="result-block">
                   <div className="rb-label">Error summary</div>
                   {result.logSummary.groupedErrors.map((group, i) => (
                     <div key={i} style={{ marginBottom: "8px", fontSize: "12px" }}>
-                      <strong>{group.count}x</strong> {group.type}
-                      {group.services.length > 0 && (
-                        <span style={{ marginLeft: "8px", color: "#666" }}>
-                          in {group.services.join(", ")}
-                        </span>
-                      )}
-                      {group.sampleMessage && (
-                        <div style={{ fontSize: "10px", color: "#999", marginTop: "2px" }}>
-                          {group.sampleMessage.split("\n")[0]}
+                      <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                        <strong>{group.count}x</strong> {group.type}
+                        {group.services.length > 0 && (
+                          <span style={{ color: "#666" }}>
+                            in {group.services.join(", ")}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => toggleErrorExpand(i)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#0a84ff",
+                            cursor: "pointer",
+                            fontSize: "11px",
+                            padding: "0 0 0 4px",
+                          }}
+                        >
+                          {expandedErrors.includes(i) ? "show less" : "show more"}
+                        </button>
+                      </div>
+                      {expandedErrors.includes(i) && group.sampleMessage && (
+                        <div
+                          style={{
+                            fontSize: "10px",
+                            color: "#999",
+                            marginTop: "4px",
+                            paddingLeft: "12px",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {group.sampleMessage}
                         </div>
                       )}
                     </div>
@@ -226,14 +290,22 @@ export default function App() {
               {/* Affected services */}
               {result.logSummary.affectedServices.length > 0 && (
                 <div className="services-row">
-                  <div style={{ fontSize: "10px", color: "#555", letterSpacing: "1px", marginBottom: "6px" }}>AFFECTED</div>
-                  {result.logSummary.affectedServices.map(s => <span key={s} className="service-chip">{s}</span>)}
+                  <div style={{ fontSize: "10px", color: "#555", letterSpacing: "1px", marginBottom: "6px" }}>
+                    AFFECTED
+                  </div>
+                  {result.logSummary.affectedServices.map(s => (
+                    <span key={s} className="service-chip">
+                      {s}
+                    </span>
+                  ))}
                 </div>
               )}
 
               {/* Fix */}
               <div className="result-block">
-                <div className="rb-label">Fix plan <span className="rb-tag">{result.fix.estimatedResolutionTime}</span></div>
+                <div className="rb-label">
+                  Fix plan <span className="rb-tag">{result.fix.estimatedResolutionTime}</span>
+                </div>
                 <div className="fix-list">
                   {result.fix.immediate.map((s, i) => (
                     <div key={i} className="fix-item">
@@ -260,8 +332,18 @@ export default function App() {
                 <div className="rb-label">Confidence breakdown</div>
                 {Object.entries(result.confidence.breakdown).map(([k, v]) => (
                   <div key={k} className="cbar-row">
-                    <span className="cbar-key">{k.replace(/([A-Z])/g, " $1").trim()}</span>
-                    <div className="cbar-track"><div className="cbar-fill" style={{ width: v + "%", background: v >= 80 ? "#22c55e" : v >= 60 ? "#f59e0b" : "#ef4444" }} /></div>
+                    <span className="cbar-key">
+                      {k.replace(/([A-Z])/g, " $1").trim()}
+                    </span>
+                    <div className="cbar-track">
+                      <div
+                        className="cbar-fill"
+                        style={{
+                          width: v + "%",
+                          background: v >= 80 ? "#22c55e" : v >= 60 ? "#f59e0b" : "#ef4444",
+                        }}
+                      />
+                    </div>
                     <span className="cbar-val">{v}%</span>
                   </div>
                 ))}
@@ -281,8 +363,14 @@ export default function App() {
               {/* Patterns */}
               {result.logSummary.patterns.length > 0 && (
                 <div className="pattern-row">
-                  <div style={{ width: "100%", fontSize: "10px", color: "#555", letterSpacing: "1px", marginBottom: "6px" }}>PATTERNS</div>
-                  {result.logSummary.patterns.map(p => <span key={p} className="pattern-chip">{p.replace("_", " ")}</span>)}
+                  <div style={{ width: "100%", fontSize: "10px", color: "#555", letterSpacing: "1px", marginBottom: "6px" }}>
+                    PATTERNS
+                  </div>
+                  {result.logSummary.patterns.map(p => (
+                    <span key={p} className="pattern-chip">
+                      {p.replace("_", " ")}
+                    </span>
+                  ))}
                 </div>
               )}
 
@@ -310,7 +398,12 @@ export default function App() {
                 </button>
                 {traceOpen && (
                   <div className="trace-list">
-                    {result.agentTrace.map((t, i) => <div key={i} className="trace-row"><span className="trace-dot" />{t}</div>)}
+                    {result.agentTrace.map((t, i) => (
+                      <div key={i} className="trace-row">
+                        <span className="trace-dot" />
+                        {t}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -318,6 +411,7 @@ export default function App() {
           )}
         </div>
       </div>
+
       <div className="footer">AIRS · multi-agent system · by Shreayas Zagare</div>
     </div>
   );

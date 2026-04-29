@@ -247,3 +247,23 @@ html, body, #root {
     gap: 6px;
   }
 }
+
+.live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #999;
+  margin-right: 6px;
+  transition: background 0.2s;
+}
+
+.live-dot-active {
+  background: #22c55e;
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.3); }
+}
