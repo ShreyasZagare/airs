@@ -10,7 +10,7 @@ export async function rootCauseAgent(logContext) {
   // Fast heuristic path
   const heuristic = heuristicAnalysis(patterns, affectedServices);
 
-  if (heuristic.confidence >= 0.8) {
+  if (heuristic.confidence >= 0.8 && patterns.length === 1) {
     return {
       cause:    heuristic.cause,
       category: heuristic.category,

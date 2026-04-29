@@ -11,9 +11,15 @@ const SAMPLE_LOGS = [
   { level: "ERROR", message: "DB connection timeout after 30000ms", service: "order-service" }
 ];
 
-const RAW_EXCEPTION_EXAMPLE = `Exception in thread "main" java.lang.NullPointerException
+const RAW_EXCEPTION_EXAMPLE = `[2025-04-01 14:23:01] ERROR com.app.PaymentService: NullPointerException at PaymentService.processPayment line 120
+[2025-04-01 14:23:02] ERROR com.app.OrderService: NullPointerException at OrderService.placeOrder line 55
+java.lang.NullPointerException
         at com.app.Main.run(Main.java:42)
-        at com.app.Worker.process(Worker.java:18)`;
+        at com.app.Worker.process(Worker.java:18)
+[2025-04-01 14:25:10] WARN Connection pool at 90% capacity (180/200) - db-pool
+[2025-04-01 14:26:45] ERROR com.app.PaymentService: DB connection timeout after 30000ms
+[2025-04-01 14:27:00] ERROR com.app.PaymentService: DB connection timeout after 30000ms
+[2025-04-01 14:28:15] INFO PaymentService: Retrying failed transaction (attempt 2/3)`;
 
 const AGENTS = [
   { id: "log", label: "Log", sub: "parsing" },
@@ -60,11 +66,9 @@ export default function App() {
 
     try {
       let res;
-
       if (mode === "sample") {
         res = await fetch(`${API}/api/analyze`);
       } else {
-        // Send the raw string – the backend normalizer will parse it.
         res = await fetch(`${API}/api/analyze`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -158,7 +162,6 @@ export default function App() {
 
         {/* Right Panel */}
         <div className="panel panel-result">
-
           {!result && !loading && (
             <div className="empty-state">
               <div className="empty-text">Run analysis to see results</div>
@@ -197,6 +200,28 @@ export default function App() {
                 <div className="rb-text">{result.rootCause.cause}</div>
                 <div className="rb-meta">via {result.rootCause.method} • severity: {result.rootCause.severity}</div>
               </div>
+
+              {/* Grouped errors - NEW */}
+              {result.logSummary.groupedErrors && result.logSummary.groupedErrors.length > 0 && (
+                <div className="result-block">
+                  <div className="rb-label">Error summary</div>
+                  {result.logSummary.groupedErrors.map((group, i) => (
+                    <div key={i} style={{ marginBottom: "8px", fontSize: "12px" }}>
+                      <strong>{group.count}x</strong> {group.type}
+                      {group.services.length > 0 && (
+                        <span style={{ marginLeft: "8px", color: "#666" }}>
+                          in {group.services.join(", ")}
+                        </span>
+                      )}
+                      {group.sampleMessage && (
+                        <div style={{ fontSize: "10px", color: "#999", marginTop: "2px" }}>
+                          {group.sampleMessage.split("\n")[0]}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Affected services */}
               {result.logSummary.affectedServices.length > 0 && (
@@ -293,7 +318,7 @@ export default function App() {
           )}
         </div>
       </div>
-      <div className="footer">AIRS · multi-agent system</div>
+      <div className="footer">AIRS · multi-agent system · by Shreayas Zagare</div>
     </div>
   );
 }

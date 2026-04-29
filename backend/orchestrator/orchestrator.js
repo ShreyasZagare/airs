@@ -2,7 +2,7 @@ import { logAgent }        from "../agents/logAgent.js";
 import { rootCauseAgent }  from "../agents/rootCauseAgent.js";
 import { fixAgent }        from "../agents/fixAgent.js";
 import { confidenceAgent } from "../agents/confidenceAgent.js";
-import { normalizeLogs }   from "../core/normalizeLogs.js";   // <-- ensure this file exists
+import { normalizeLogs }   from "../core/normalizeLogs.js";
 
 /**
  * Orchestrator — sequential agent pipeline with context passing
@@ -49,6 +49,7 @@ export async function orchestrate(logs) {
       affectedServices: logCtx.affectedServices,
       counts:           logCtx.counts,
       patterns:         logCtx.patterns,
+      groupedErrors:    logCtx.groupedErrors || [],   // ← THIS WAS MISSING
     },
     rootCause: {
       cause:    rootCtx.cause,
