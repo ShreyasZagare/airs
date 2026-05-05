@@ -24,25 +24,30 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [mode, setMode] = useState("custom");
-  const [customText, setCustomText] = useState(""); // custom starts empty
+  const [mode, setMode] = useState("sample");
+  const [customText, setCustomText] = useState("");
+
   const [activeAgent, setActiveAgent] = useState(-1);
   const [traceOpen, setTraceOpen] = useState(false);
   const [agentLogs, setAgentLogs] = useState([]);
   const [handoffOpen, setHandoffOpen] = useState(false);
-  const timer = useRef(null);
   const [expandedErrors, setExpandedErrors] = useState([]);
+
+  const timer = useRef(null);
 
   function switchMode(newMode) {
     setMode(newMode);
-    if (newMode === "sample") {
-      setCustomText(SAMPLE_LOGS_TEXT); // fill textarea with sample logs
-    } else {
-      setCustomText(""); // clear textarea for custom input
-    }
   }
 
   async function run() {
+    const logsToSend =
+      mode === "sample" ? SAMPLE_LOGS_TEXT : customText;
+
+    if (mode === "custom" && !customText.trim()) {
+      setError("Please paste logs before running analysis.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setResult(null);
@@ -56,12 +61,12 @@ export default function App() {
       "Correlating failures...",
       "Identifying root cause...",
       "Generating fix strategy...",
-      "Scoring confidence..."
+      "Scoring confidence...",
     ];
 
     let i = 0;
     timer.current = setInterval(() => {
-      setAgentLogs(prev => [...prev, messages[i]]);
+      setAgentLogs((prev) => [...prev, messages[i]]);
       setActiveAgent(Math.min(i, 3));
       i++;
       if (i >= messages.length) clearInterval(timer.current);
@@ -71,7 +76,7 @@ export default function App() {
       const res = await fetch(`${API}/api/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logs: customText }),
+        body: JSON.stringify({ logs: logsToSend }),
       });
 
       const json = await res.json();
@@ -90,8 +95,10 @@ export default function App() {
   }
 
   function toggleErrorExpand(idx) {
-    setExpandedErrors(prev =>
-      prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+    setExpandedErrors((prev) =>
+      prev.includes(idx)
+        ? prev.filter((i) => i !== idx)
+        : [...prev, idx]
     );
   }
 
@@ -99,13 +106,15 @@ export default function App() {
     ? result.confidence.level === "high"
       ? "#22c55e"
       : result.confidence.level === "medium"
-        ? "#f59e0b"
-        : "#ef4444"
+      ? "#f59e0b"
+      : "#ef4444"
     : "#888";
+
+  const displayText =
+    mode === "sample" ? SAMPLE_LOGS_TEXT : customText;
 
   return (
     <div className="root">
-      {/* Topbar */}
       <div className="topbar">
         <div className="topbar-left">
           <span className="topbar-dot" />
@@ -115,9 +124,13 @@ export default function App() {
         </div>
         <div className="topbar-pills">
           <span className="pill pill-teal">4 agents</span>
-          {/* "Live" pill always shows "Live", but gets a pulsing dot when executing */}
           <span className={`pill pill-gray ${loading ? "pill-live" : ""}`}>
-            <span className={`live-dot ${loading ? "live-dot-active" : ""}`} /> Live
+            <span
+              className={`live-dot ${
+                loading ? "live-dot-active" : ""
+              }`}
+            />{" "}
+            Live
           </span>
         </div>
       </div>
@@ -125,29 +138,41 @@ export default function App() {
       {/* Pipeline */}
       <div className="pipeline-strip">
         {AGENTS.map((a, i) => (
-          <div key={a.id} className={`ps-item ${loading && activeAgent === i ? "ps-active" : ""}`}>
+          <div
+            key={a.id}
+            className={`ps-item ${
+              loading && activeAgent === i ? "ps-active" : ""
+            }`}
+          >
             <div className="ps-num">{i + 1}</div>
             <div className="ps-label">{a.label}</div>
-            {loading && activeAgent === i && <div className="ps-pulse" />}
-            {i < AGENTS.length - 1 && <div className="ps-arrow">→</div>}
+            {loading && activeAgent === i && (
+              <div className="ps-pulse" />
+            )}
+            {i < AGENTS.length - 1 && (
+              <div className="ps-arrow">→</div>
+            )}
           </div>
         ))}
       </div>
 
-      {/* Main */}
       <div className="main">
         {/* Left Panel */}
         <div className="panel">
           <div className="panel-header">
             <div className="seg">
               <button
-                className={`seg-btn ${mode === "sample" ? "seg-on" : ""}`}
+                className={`seg-btn ${
+                  mode === "sample" ? "seg-on" : ""
+                }`}
                 onClick={() => switchMode("sample")}
               >
                 Sample
               </button>
               <button
-                className={`seg-btn ${mode === "custom" ? "seg-on" : ""}`}
+                className={`seg-btn ${
+                  mode === "custom" ? "seg-on" : ""
+                }`}
                 onClick={() => switchMode("custom")}
               >
                 Custom
@@ -155,26 +180,45 @@ export default function App() {
             </div>
           </div>
 
-          {/* Unified textarea */}
+          {/* Hint */}
+          <div className="hint-text">
+            {mode === "sample"
+              ? "Using built-in sample logs"
+              : "Paste your logs (JSON, Apache, stack traces, etc.)"}
+          </div>
+
           <textarea
             className="log-ta"
-            value={customText}
+            value={displayText}
             onChange={(e) => setCustomText(e.target.value)}
-            placeholder="Paste any logs: JSON, Apache, syslog, or raw exceptions…"
+            placeholder={
+              mode === "custom"
+                ? "Paste your logs here…"
+                : ""
+            }
+            readOnly={mode === "sample"}
           />
 
-          <button className="run-btn" onClick={run} disabled={loading}>
-            {loading ? "⚙️ Agents collaborating..." : "Run analysis →"}
+          <button
+            className="run-btn"
+            onClick={run}
+            disabled={loading}
+          >
+            {loading
+              ? "⚙️ Agents collaborating..."
+              : "Run analysis →"}
           </button>
 
           {error && <div className="error-box">{error}</div>}
         </div>
 
-        {/* Right Panel – unchanged from previous version */}
+        {/* Right Panel remains unchanged */}
         <div className="panel panel-result">
           {!result && !loading && (
             <div className="empty-state">
-              <div className="empty-text">Run analysis to see results</div>
+              <div className="empty-text">
+                Run analysis to see results
+              </div>
             </div>
           )}
 
@@ -182,7 +226,10 @@ export default function App() {
             <div className="loading-state">
               <div className="loading-label">
                 {activeAgent >= 0
-                  ? AGENTS[activeAgent].label + " agent " + AGENTS[activeAgent].sub + "…"
+                  ? AGENTS[activeAgent].label +
+                    " agent " +
+                    AGENTS[activeAgent].sub +
+                    "…"
                   : "Finalizing…"}
               </div>
               <div className="loading-bar">
@@ -412,7 +459,9 @@ export default function App() {
         </div>
       </div>
 
-      <div className="footer">AIRS · multi-agent system · by Shreayas Zagare</div>
+      <div className="footer">
+        AIRS · multi-agent system · by Shreyas Zagare
+      </div>
     </div>
   );
 }
